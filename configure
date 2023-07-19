@@ -342,6 +342,7 @@ External library support:
   --enable-mmal            enable Broadcom Multi-Media Abstraction Layer (Raspberry Pi) via MMAL [no]
   --disable-nvdec          disable Nvidia video decoding acceleration (via hwaccel) [autodetect]
   --disable-nvenc          disable Nvidia video encoding code [autodetect]
+  --disable-tfenc          disable Thinkforce video encoding code [autodetect]
   --enable-omx             enable OpenMAX IL code [no]
   --enable-omx-rpi         enable OpenMAX IL code for Raspberry Pi [no]
   --enable-rkmpp           enable Rockchip Media Process Platform code [no]
@@ -1341,6 +1342,7 @@ check_func_headers(){
     funcs=$2
     shift 2
     {
+        echo "#include <stddef.h>"
         for hdr in $headers; do
             print_include $hdr
         done
@@ -1842,6 +1844,7 @@ HWACCEL_AUTODETECT_LIBRARY_LIST="
     dxva2
     ffnvcodec
     nvdec
+    tfenc
     nvenc
     vaapi
     vdpau
@@ -3067,6 +3070,10 @@ nvenc_deps="ffnvcodec"
 nvenc_deps_any="libdl LoadLibrary"
 nvenc_encoder_deps="nvenc"
 
+tfenc_deps="ffnvcodec"
+tfenc_deps_any="libdl LoadLibrary"
+tfenc_encoder_deps="tfenc"
+
 aac_mf_encoder_deps="mediafoundation"
 ac3_mf_encoder_deps="mediafoundation"
 av1_cuvid_decoder_deps="cuvid CUVIDAV1PICPARAMS"
@@ -3082,6 +3089,8 @@ h264_mf_encoder_deps="mediafoundation"
 h264_mmal_decoder_deps="mmal"
 h264_nvenc_encoder_deps="nvenc"
 h264_nvenc_encoder_select="atsc_a53"
+h264_tfenc_encoder_deps="tfenc"
+h264_tfenc_encoder_select="atsc_a53"
 h264_omx_encoder_deps="omx"
 h264_qsv_decoder_select="h264_mp4toannexb_bsf qsvdec"
 h264_qsv_encoder_select="atsc_a53 qsvenc"
@@ -3099,6 +3108,8 @@ hevc_mediacodec_decoder_select="hevc_mp4toannexb_bsf hevc_parser"
 hevc_mf_encoder_deps="mediafoundation"
 hevc_nvenc_encoder_deps="nvenc"
 hevc_nvenc_encoder_select="atsc_a53"
+hevc_tfenc_encoder_deps="tfenc"
+hevc_tfenc_encoder_select="atsc_a53"
 hevc_qsv_decoder_select="hevc_mp4toannexb_bsf qsvdec"
 hevc_qsv_encoder_select="hevcparse qsvenc"
 hevc_rkmpp_decoder_deps="rkmpp"
@@ -3753,7 +3764,7 @@ doc_deps_any="manpages htmlpages podpages txtpages"
 logfile="ffbuild/config.log"
 
 # installation paths
-prefix_default="/usr/local"
+prefix_default="/opt/tfmpeg"
 bindir_default='${prefix}/bin'
 datadir_default='${prefix}/share/ffmpeg'
 docdir_default='${prefix}/share/doc/ffmpeg'
@@ -6788,6 +6799,8 @@ NV_ENCODE_API_FUNCTION_LIST flist;
 void f(void) { struct { const GUID guid; } s[] = { { NV_ENC_PRESET_HQ_GUID } }; }
 int main(void) { return 0; }
 EOF
+
+enabled tfenc && add_cppflags '-I/home/wx/tfdl2' && add_ldflags '-L/home/wx/tfdl2/tfenc' && require tfenc tfenc/tfenc_api.h tfenc_encoder_create -ltfenc
 
 if enabled_any nvdec cuvid; then
     check_type "ffnvcodec/dynlink_cuda.h ffnvcodec/dynlink_cuviddec.h" "CUVIDAV1PICPARAMS"
