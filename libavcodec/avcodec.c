@@ -22,7 +22,7 @@
  * @file
  * AVCodecContext functions for libavcodec
  */
-
+#include <execinfo.h>
 #include "config.h"
 #include "libavutil/avassert.h"
 #include "libavutil/avstring.h"
@@ -141,6 +141,22 @@ static int64_t get_bit_rate(AVCodecContext *ctx)
     return bit_rate;
 }
 
+static void print_trace(void) {
+    void *array[10];
+    size_t size;
+    char **strings;
+    size_t i;
+
+    size = backtrace(array, 10);
+    strings = backtrace_symbols(array, size);
+
+    printf("Obtained %zd stack frames.\n", size);
+
+    for (i = 0; i < size; i++)
+       printf("%s\n", strings[i]);
+
+    free(strings);
+}
 int attribute_align_arg avcodec_open2(AVCodecContext *avctx, const AVCodec *codec, AVDictionary **options)
 {
     int ret = 0;
@@ -353,6 +369,7 @@ int attribute_align_arg avcodec_open2(AVCodecContext *avctx, const AVCodec *code
             codec_init_ok = -1;
             goto free_and_end;
         }
+
         codec_init_ok = 1;
     }
 

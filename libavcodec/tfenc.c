@@ -4,7 +4,9 @@
 #include "libavutil/internal.h"
 
 #include "avcodec.h"
+#include "encode.h"
 #include "internal.h"
+#include "packet_internal.h"
 #define OFFSET(x) offsetof(NvencContext, x)
 #define VE AV_OPT_FLAG_VIDEO_PARAM | AV_OPT_FLAG_ENCODING_PARAM
 static const AVOption options[] = {
@@ -199,10 +201,47 @@ static const AVCodecDefault defaults[] = {
     { "refs", "0" },
     { NULL },
 };
+
+static av_cold int tfenc_setup_surfaces(AVCodecContext *avctx)
+{
+    TfencContext *ctx = avctx->priv_data;
+    int i, res = 0, res2;
+
+    ctx->nb_buffers = 4;
+
+    ctx->output_buffer_ready_queue = av_fifo_alloc(ctx->nb_buffers * sizeof(TfencBuffer*));
+    if (!ctx->output_buffer_ready_queue)
+        return AVERROR(ENOMEM);
+
+    ctx->timestamp_list = av_fifo_alloc(ctx->nb_buffers * sizeof(int64_t));
+    if (!ctx->timestamp_list)
+        return AVERROR(ENOMEM);
+
+    return res;
+}
+
+static int output_ready(AVCodecContext *avctx, int flush)
+{
+    TfencContext *ctx = avctx->priv_data;
+    int nb_ready;
+
+    nb_ready = av_fifo_size(ctx->output_buffer_ready_queue)   / sizeof(TfencBuffer*);
+    return nb_ready > 0;
+}
 static void ff_tfenc_callback(void *user_param, void *data, int len)
 {
     AVCodecContext *avctx = user_param;
-    av_log(avctx, AV_LOG_WARNING, "%s implement\n", __func__);
+    TfencContext *ctx = avctx->priv_data;
+    // av_log(avctx, AV_LOG_WARNING, "%s [in]\n", __func__);
+    TfencBuffer *buffer = malloc(sizeof(TfencBuffer));
+    buffer->data = malloc(len);
+    buffer->len = len;
+
+    memcpy(buffer->data,data,len);
+
+    // thread-safe?
+    // out of range?
+    av_fifo_generic_write(ctx->output_buffer_ready_queue, &buffer, sizeof(buffer), NULL);
 }
 static av_cold int tfenc_setup_device(AVCodecContext *avctx)
 {
@@ -219,7 +258,7 @@ static av_cold int tfenc_setup_device(AVCodecContext *avctx)
     setting.level = 51;
     setting.bit_rate = 4000000 * 4;
     setting.max_bit_rate = 10000000 * 4;
-    setting.gop = 2147483647;
+    setting.gop = 50;
     
 
     if (avctx->framerate.num > 0 && avctx->framerate.den > 0) {
@@ -240,6 +279,7 @@ static av_cold int tfenc_setup_device(AVCodecContext *avctx)
     int ret = 0;
 
     ret = tfenc_encoder_create(&ctx->handle, &setting, cb);
+
     if (ret < 0){
         printf("create tfenc failed!\n");
         ctx->handle = NULL;
@@ -251,49 +291,247 @@ static av_cold int tfenc_setup_device(AVCodecContext *avctx)
 }
 static av_cold int ff_tf_enc_init(AVCodecContext *avctx)
 {
-    av_log(avctx, AV_LOG_WARNING, "%s implement\n", __func__);
+    av_log(avctx, AV_LOG_WARNING, "%s [in]\n", __func__);
     TfencContext *ctx = avctx->priv_data;
     int ret = 0;
     if ((ret = tfenc_setup_device(avctx)) < 0)
         return ret;
 
     ctx->frame = av_frame_alloc();
+    ctx->inputBuffer = malloc(avctx->width * avctx->height * 3 / 2);
     if (!ctx->frame)
         return AVERROR(ENOMEM);
+
+    if ((ret = tfenc_setup_surfaces(avctx)) < 0)
+        return ret;
     
+    
+    av_log(avctx, AV_LOG_WARNING, "%s [out] \n", __func__);
     return 0;
 }
  
 static av_cold int ff_tf_enc_close(AVCodecContext *avctx)
 {
-    av_log(avctx, AV_LOG_WARNING, "%s no implement\n", __func__);
+    av_log(avctx, AV_LOG_WARNING, "%s [in]\n", __func__);
+
+    TfencContext *ctx = avctx->priv_data;
+
+    //TODO check thread safe
+    //TODO check leaky output buffer // do1
+
+    TfencBuffer* out_buf;
+    while (output_ready(avctx, avctx->internal->draining)) {
+        av_fifo_generic_read(ctx->output_buffer_ready_queue, &out_buf, sizeof(out_buf), NULL);
+
+        free(out_buf->data);
+        free(out_buf);
+    }
+
+    av_fifo_freep(&ctx->timestamp_list);
+    av_fifo_freep(&ctx->output_buffer_ready_queue);
+
+    free(ctx->inputBuffer);
+
+    if(ctx->handle)
+        tfenc_encoder_destroy(ctx->handle);
+
+    av_log(avctx, AV_LOG_WARNING, "%s [out]\n", __func__);
  
     return 0;
 }
 
+static int avframe_get_size(AVCodecContext *avctx, AVFrame *frame) {
+    int size = 0;
+    int i;
 
-static int tfenc_send_frame(AVCodecContext *avctx, const AVFrame *frame)
-{
-    NvencContext *ctx = avctx->priv_data;
-    int res;
-    av_log(avctx, AV_LOG_WARNING, "%s implement\n", __func__);
-
-    if (frame && frame->buf[0]) {
-        tfenc_process_frame(ctx->handle,input,len);
-    } else {
-        // pic_params.encodePicFlags = NV_ENC_PIC_FLAG_EOS;
+    if (frame->format != AV_PIX_FMT_YUV420P && 
+        frame->format != AV_PIX_FMT_NV12){
+        av_log(avctx, AV_LOG_ERROR, "%s format is not I420 or nv12\n", __func__);
+        return -1;
     }
-    return AVERROR(EAGAIN);
+    for (i = 0; i < AV_NUM_DATA_POINTERS; i++) {
+        if (frame->data[i] != NULL) {
+            int plane_lines = i == 0 ? frame->height : frame->height / 2;
+            size += plane_lines * frame->linesize[i];
+        }
+    }
+
+    return size;
+}
+static int copy_avframe_to_buffer(AVFrame *frame, uint8_t *buffer) {
+    int y, u, v;
+    uint8_t *dst = buffer;
+    uint8_t *src_y = frame->data[0];
+    uint8_t *src_u = frame->data[1];
+    uint8_t *src_v = frame->data[2];
+    int width = frame->width;
+    int height = frame->height;
+
+    // Copy Y plane
+    for (y = 0; y < height; y++) {
+        memcpy(dst, src_y, width);
+        dst += width;
+        src_y += frame->linesize[0];
+    }
+
+    if (frame->format == AV_PIX_FMT_YUV420P){
+        //420 to NV12
+        //TODO libyuv
+        for (u = 0; u < height / 2; u++) {
+            for (v = 0;v < frame->linesize[1]; v++){
+                *dst++ = src_u[v];
+                *dst++ = src_v[v];
+            }
+            src_u += frame->linesize[1];
+            src_v += frame->linesize[1];
+        }
+    }else if (frame->format == AV_PIX_FMT_NV12){
+
+        // Copy UV plane
+        for (u = 0; u < height / 2; u++) {
+            memcpy(dst, src_u, width);
+            dst += width;
+            src_u += frame->linesize[1];
+        }
+    }else{
+        printf("%s format is not I420 or nv12\n", __func__);
+    }
+    return 0;
+
+    // Copy Y plane
+    for (y = 0; y < height; y++) {
+        memcpy(dst, src_y, width);
+        dst += width;
+        src_y += frame->linesize[0];
+    }
+
+    // Copy U plane
+    for (u = 0; u < height / 2; u++) {
+        memcpy(dst, src_u, width / 2);
+        dst += width / 2;
+        src_u += frame->linesize[1];
+    }
+
+    // Copy V plane
+    for (v = 0; v < height / 2; v++) {
+        memcpy(dst, src_v, width / 2);
+        dst += width / 2;
+        src_v += frame->linesize[2];
+    }
+
+    return 0;
 }
 
+static inline void timestamp_queue_enqueue(AVFifoBuffer* queue, int64_t timestamp)
+{
+    av_fifo_generic_write(queue, &timestamp, sizeof(timestamp), NULL);
+}
+
+static inline int64_t timestamp_queue_dequeue(AVFifoBuffer* queue)
+{
+    int64_t timestamp = AV_NOPTS_VALUE;
+    if (av_fifo_size(queue) > 0)
+        av_fifo_generic_read(queue, &timestamp, sizeof(timestamp), NULL);
+
+    return timestamp;
+}
+static int tfenc_send_frame(AVCodecContext *avctx, const AVFrame *frame)
+{
+    TfencContext *ctx = avctx->priv_data;
+    int res;
+    uint8_t* input;
+    // av_log(avctx, AV_LOG_WARNING, "%s [in]\n", __func__);
+
+    if (frame && frame->buf[0]) {
+        int frame_alloc_size = avframe_get_size(avctx,frame);
+
+        input = (uint8_t*)ctx->inputBuffer;//malloc(frame_alloc_size);
+
+        copy_avframe_to_buffer(frame,input);
+
+        tfenc_process_frame(ctx->handle,input,frame_alloc_size);
+
+        // printf("[wx]need size %d %d %d %d\n",frame_alloc_size,frame->width,frame->linesize[0],frame->height);
+
+        timestamp_queue_enqueue(ctx->timestamp_list, frame->pts);
+
+        // free(input);
+    } else {
+    }
+
+    // av_log(avctx, AV_LOG_WARNING, "%s [out]\n", __func__);
+    return 0;
+}
+static int tfenc_set_timestamp(AVCodecContext *avctx,
+                               int pts,
+                               AVPacket *pkt)
+{
+    TfencContext *ctx = avctx->priv_data;
+
+    pkt->dts = timestamp_queue_dequeue(ctx->timestamp_list);
+    pkt->pts = pkt->dts;//TODO correct tfenc pts, now use dts instead
+
+    int frameIntervalP = 1;//tfenc hardcode
+    pkt->dts -= FFMAX(frameIntervalP - 1, 0) * FFMAX(avctx->ticks_per_frame, 1) * FFMAX(avctx->time_base.num, 1);
+
+    return 0;
+}
+
+static int process_output_buffer(AVCodecContext *avctx, AVPacket *pkt, TfencBuffer *buf)
+{
+    TfencContext *ctx = avctx->priv_data;
+
+    int res = 0;
+
+    enum AVPictureType pict_type;
+
+    res = ff_get_encode_buffer(avctx, pkt, buf->len, 0);
+    if (res < 0) {
+        goto error;
+    }
+    memcpy(pkt->data, buf->data, buf->len);
+
+    if(analyzeh264Frame(buf->data,buf->len < 200?buf->len:200)) {
+        pkt->flags |= AV_PKT_FLAG_KEY;
+        pict_type = AV_PICTURE_TYPE_I;
+        // printf("[wx] frameI %d\n",buf->len);
+    }else{
+        pict_type = AV_PICTURE_TYPE_P;
+        // printf("[wx] frameP %d\n",buf->len);
+    }
+
+#if FF_API_CODED_FRAME
+FF_DISABLE_DEPRECATION_WARNINGS
+    avctx->coded_frame->pict_type = pict_type;
+FF_ENABLE_DEPRECATION_WARNINGS
+#endif
+
+    int fakeQP = 51;//TODO correct tfenc qp
+
+    ff_side_data_set_encoder_stats(pkt,
+        (fakeQP - 1) * FF_QP2LAMBDA, NULL, 0, pict_type);
+
+    res = tfenc_set_timestamp(avctx, 0, pkt);
+    if (res < 0)
+        goto error2;
+    
+    return 0;
+
+error:
+    timestamp_queue_dequeue(ctx->timestamp_list);
+
+error2:
+    return res;
+}
 static int ff_tf_enc_receive_packet(AVCodecContext *avctx, AVPacket *pkt)
 {
-    NvencContext *ctx = avctx->priv_data;
+    TfencContext *ctx = avctx->priv_data;
     AVFrame *frame = ctx->frame;
+    TfencBuffer *out_buf;
     int res;
     // av_log(avctx, AV_LOG_VERBOSE, "Not implement.\n");
 
-    av_log(avctx, AV_LOG_WARNING, "%s implement\n", __func__);
+    // av_log(avctx, AV_LOG_WARNING, "%s [in]\n", __func__);
 
     if (!frame->buf[0]) {
         res = ff_encode_get_frame(avctx, frame);
@@ -308,14 +546,35 @@ static int ff_tf_enc_receive_packet(AVCodecContext *avctx, AVPacket *pkt)
     } else
         av_frame_unref(frame);
 
+    if (output_ready(avctx, avctx->internal->draining)) {
+        av_fifo_generic_read(ctx->output_buffer_ready_queue, &out_buf, sizeof(out_buf), NULL);
 
-    return AVERROR(EAGAIN);
+        res = process_output_buffer(avctx, pkt, out_buf);
+
+        if (res)
+            return res;
+
+        free(out_buf->data);
+        free(out_buf);
+    } else if (avctx->internal->draining) {
+        return AVERROR_EOF;
+    } else {
+        return AVERROR(EAGAIN);
+    }
+
+    return 0;
 }
  
 
 static av_cold void ff_tf_encode_flush(AVCodecContext *avctx)
 {
-    av_log(avctx, AV_LOG_WARNING, "%s no implement\n", __func__);
+    av_log(avctx, AV_LOG_WARNING, "%s [in]\n", __func__);
+
+    TfencContext *ctx = avctx->priv_data;
+
+    tfenc_send_frame(avctx, NULL);
+    av_fifo_reset(ctx->timestamp_list);
+    av_log(avctx, AV_LOG_WARNING, "%s [out]\n", __func__);
 }
 static const AVClass h264_tfenc_class = {
     .class_name = "h264_tfenc",
