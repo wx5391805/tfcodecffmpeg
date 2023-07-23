@@ -21,6 +21,7 @@ int analyzeh264Frame(uint8_t* data,int len){
             //
             i += startLen;
             int flag = (data[i] & 0x1f);
+            // printf("raw flag %d\n",flag);
             if(flag == 9)continue;
             if(flag == 7){
                 continue;

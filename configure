@@ -1343,6 +1343,7 @@ check_func_headers(){
     shift 2
     {
         echo "#include <stddef.h>"
+        echo "#include <stdint.h>"
         for hdr in $headers; do
             print_include $hdr
         done
@@ -1840,6 +1841,7 @@ HWACCEL_AUTODETECT_LIBRARY_LIST="
     cuda
     cuda_llvm
     cuvid
+    tfvid
     d3d11va
     dxva2
     ffnvcodec
@@ -3073,6 +3075,9 @@ nvenc_encoder_deps="nvenc"
 tfenc_deps="ffnvcodec"
 tfenc_deps_any="libdl LoadLibrary"
 tfenc_encoder_deps="tfenc"
+
+h264_tfvid_decoder_deps="tfvid"
+h264_tfvid_decoder_select="h264_mp4toannexb_bsf"
 
 aac_mf_encoder_deps="mediafoundation"
 ac3_mf_encoder_deps="mediafoundation"
@@ -6800,7 +6805,14 @@ void f(void) { struct { const GUID guid; } s[] = { { NV_ENC_PRESET_HQ_GUID } }; 
 int main(void) { return 0; }
 EOF
 
-enabled tfenc && add_cppflags '-I/home/wx/tfdl2' && add_ldflags '-L/home/wx/tfdl2/tfenc' && require tfenc tfenc/tfenc_api.h tfenc_encoder_create -ltfenc
+enabled tfenc && 
+    add_cppflags '-I/home/wx/tfdl2' &&
+    add_ldflags '-L/home/wx/tfdl2/tfenc' && 
+    require tfenc tfenc/tfenc_api.h tfenc_encoder_create -ltfenc
+enabled tfvid && 
+    add_cppflags '-I/home/wx/tfdl2' &&
+    add_ldflags '-L/home/wx/tfdl2/tfdec' && 
+    require tfvid tfdec/libtfdec.h tfdec_create -ltfdec
 
 if enabled_any nvdec cuvid; then
     check_type "ffnvcodec/dynlink_cuda.h ffnvcodec/dynlink_cuviddec.h" "CUVIDAV1PICPARAMS"
