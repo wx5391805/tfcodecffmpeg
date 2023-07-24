@@ -1,3 +1,3 @@
 rm ffbuild/config.log
-./configure
+./configure --disable-nvenc --disable-cuvid
 

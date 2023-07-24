@@ -1,5 +1,4 @@
 #include "tfenc.h"
-#include "nvenc.h"
 
 #include "libavutil/internal.h"
 
@@ -23,13 +22,13 @@ const AVCodecHWConfigInternal *const ff_tfenc_hw_configs[] = {
 };
 const enum AVPixelFormat ff_tf_enc_pix_fmts[] = {
     AV_PIX_FMT_NV12,
-    AV_PIX_FMT_YUV420P,
-    AV_PIX_FMT_P010,
-    AV_PIX_FMT_YUV444P,
-    AV_PIX_FMT_P016,      // Truncated to 10bits
-    AV_PIX_FMT_YUV444P16, // Truncated to 10bits
-    AV_PIX_FMT_0RGB32,
-    AV_PIX_FMT_0BGR32,
+    // AV_PIX_FMT_YUV420P,
+    // AV_PIX_FMT_P010,
+    // AV_PIX_FMT_YUV444P,
+    // AV_PIX_FMT_P016,      // Truncated to 10bits
+    // AV_PIX_FMT_YUV444P16, // Truncated to 10bits
+    // AV_PIX_FMT_0RGB32,
+    // AV_PIX_FMT_0BGR32,
     AV_PIX_FMT_NONE
 };
 

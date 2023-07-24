@@ -3072,9 +3072,9 @@ nvenc_deps="ffnvcodec"
 nvenc_deps_any="libdl LoadLibrary"
 nvenc_encoder_deps="nvenc"
 
-tfenc_deps="ffnvcodec"
-tfenc_deps_any="libdl LoadLibrary"
-tfenc_encoder_deps="tfenc"
+# tfenc_deps="ffnvcodec"
+# tfenc_deps_any="libdl LoadLibrary"
+# tfenc_encoder_deps="tfenc"
 
 h264_tfvid_decoder_deps="tfvid"
 h264_tfvid_decoder_select="h264_mp4toannexb_bsf"

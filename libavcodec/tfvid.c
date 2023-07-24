@@ -21,6 +21,7 @@ typedef struct TfvidContext
     AVClass *avclass;
     void* handle;
     int *key_frame;
+    char* tf_dev;
     int64_t prev_pts;
     int decoder_flushing;
     int nb_inbuffers;
@@ -58,6 +59,7 @@ typedef struct TfvidParsedFrame
 static const AVOption options[] = {
     { "surfaces", "Maximum tfdec output buffer to be used for decoding", OFFSET(nb_inbuffers), AV_OPT_TYPE_INT, { .i64 = 5 }, 0, INT_MAX, VD },
     { "surfaces", "Maximum output buffer to be used for decoding", OFFSET(nb_outbuffers), AV_OPT_TYPE_INT, { .i64 = 20 }, 0, INT_MAX, VD },
+    { "dev",      "device to be used for decoding", OFFSET(tf_dev), AV_OPT_TYPE_STRING, { .str = "/dev/mv500" }, 0, 0, VD },
     { NULL }
 };
 
@@ -138,7 +140,7 @@ static void tfvid_flush(AVCodecContext *avctx)
     int probed_width = avctx->coded_width ? avctx->coded_width : 1280;
     int probed_height = avctx->coded_height ? avctx->coded_height : 720;
 
-    ctx->handle = tfdec_create("/dev/mv500", ctx->codec_type, 
+    ctx->handle = tfdec_create(ctx->tf_dev, ctx->codec_type, 
                     probed_width, probed_height, 
                     ctx->nb_inbuffers, ff_tfdec_callback, avctx);
     if (!ctx->handle) {
@@ -290,12 +292,12 @@ static av_cold int tfvid_decode_init(AVCodecContext *avctx)
     // ctx->cuparseinfo.pfnDecodePicture = cuvid_handle_picture_decode;
     // ctx->cuparseinfo.pfnDisplayPicture = cuvid_handle_picture_display;
 
-    ctx->handle = tfdec_create("/dev/mv500", tfdec_codec_type, 
+    ctx->handle = tfdec_create(ctx->tf_dev, tfdec_codec_type, 
                     probed_width, probed_height, 
                     ctx->nb_inbuffers, ff_tfdec_callback, avctx);
                     
     if (!ctx->handle) {
-        av_log(avctx, AV_LOG_ERROR, "create tfdec failed. %d x %d\n",probed_width,probed_height);
+        av_log(avctx, AV_LOG_ERROR, "create tfdec failed. %d x %d on %s\n",probed_width,probed_height,ctx->tf_dev);
         return AVERROR(ENOMEM);
     }
 
@@ -320,7 +322,7 @@ static av_cold int tfvid_decode_init(AVCodecContext *avctx)
     if (!avctx->pkt_timebase.num || !avctx->pkt_timebase.den)
         av_log(avctx, AV_LOG_WARNING, "Invalid pkt_timebase, passing timestamps as-is.\n");
 
-    av_log(avctx, AV_LOG_WARNING, "%s [out] %d %p\n", __func__,tfdec_codec_type,ctx->handle);
+    av_log(avctx, AV_LOG_WARNING, "%s [out] type %d %s\n", __func__,tfdec_codec_type,ctx->tf_dev);
     return 0;
 
 error:

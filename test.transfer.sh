@@ -3,7 +3,7 @@ for i in {1..1}
 
 do
 
- echo y |  ./ffmpeg  -c:v h264_cuvid  -i "/home/wx/IMG_1224.MP4" -bf 0  -c:v h264_nvenc -c:a copy /home/wx/output$i.MP4 &
+ echo y |  ./ffmpeg  -c:v h264_tfvid  -i "/home/wx/IMG_1224.MP4" -bf 0  -c:v h264_tfenc -c:a copy /home/wx/output$i.MP4 &
 
  done
 
