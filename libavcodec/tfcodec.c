@@ -1,7 +1,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "tfenc.h"
-static int h264_start_code(uint8_t* data,int len){
+static int h2645_start_code(uint8_t* data,int len){
     if(len >= 3){
         if(data[0] == 0x00 && data[1] == 0x00){
             if(data[2] == 0x01)return 3;
@@ -12,11 +12,30 @@ static int h264_start_code(uint8_t* data,int len){
     }
     return 0;
 }
+int analyzeh265Frame(uint8_t* data,int len){
+    int i = 0;
+    int nal_type = 0;
+    int startLen;
+    for(;i < len;i++){
+        startLen = h2645_start_code(data +i,len - i);
+        if(startLen && startLen < len){
+            //
+            i += startLen;
+            int flag = ((data[i]>>1) & 0x3f);
+            // printf("raw flag %d\n",flag);
+            
+            if(flag == 19 || flag == 20)
+                return flag;
+        }
+    }
+    return 0;
+}
 int analyzeh264Frame(uint8_t* data,int len){
     int i = 0;
     int nal_type = 0;
+    int startLen;
     for(;i < len;i++){
-        int startLen = h264_start_code(data +i,len - i);
+        startLen = h2645_start_code(data +i,len - i);
         if(startLen && startLen < len){
             //
             i += startLen;

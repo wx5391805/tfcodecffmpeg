@@ -808,6 +808,7 @@ extern AVCodec ff_hevc_cuvid_decoder;
 extern AVCodec ff_hevc_mediacodec_decoder;
 extern AVCodec ff_hevc_mf_encoder;
 extern AVCodec ff_hevc_nvenc_encoder;
+extern AVCodec ff_hevc_tfenc_encoder;
 extern AVCodec ff_hevc_qsv_encoder;
 extern AVCodec ff_hevc_v4l2m2m_encoder;
 extern AVCodec ff_hevc_vaapi_encoder;

@@ -10,6 +10,7 @@
 
 #include "tfenc/tfenc_api.h"
 int analyzeh264Frame(uint8_t* data,int len);
+int analyzeh265Frame(uint8_t* data,int len);
 
 typedef struct TfencBuffer
 {
@@ -23,6 +24,8 @@ typedef struct TfencContext {
     void* inputBuffer;
     AVFrame *frame;
     int nb_buffers;
+    char* tf_dev;
+    int rc;
     AVFifoBuffer *output_buffer_ready_queue;
     AVFifoBuffer *timestamp_list;
 }TfencContext;

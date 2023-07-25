@@ -1,8 +1,6 @@
 #include "libavutil/buffer.h"
 #include "libavutil/mathematics.h"
 #include "libavutil/hwcontext.h"
-#include "libavutil/hwcontext_cuda_internal.h"
-#include "libavutil/cuda_check.h"
 #include "libavutil/fifo.h"
 #include "libavutil/log.h"
 #include "libavutil/opt.h"
@@ -379,7 +377,7 @@ static int tfvid_decode_packet(AVCodecContext *avctx, const AVPacket *avpkt)
             ret2 = tfdec_enqueue_buffer(ctx->handle, NULL, 0, timestamp, flag);//TODO check ok
 
         if(ret2 == TFDEC_STATUS_QUEUE_IS_FULL){
-            av_log(avctx, AV_LOG_WARNING, "%s tfdec input queue full %d key:%d, #%d\n", __func__,ret2,flag,pc);
+            // av_log(avctx, AV_LOG_WARNING, "%s tfdec input queue full %d key:%d, #%d\n", __func__,ret2,flag,pc);
             usleep(1000*1);
         }
     }while(ret2 == TFDEC_STATUS_QUEUE_IS_FULL && !ctx->closed);

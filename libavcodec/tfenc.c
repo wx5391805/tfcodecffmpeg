@@ -9,6 +9,11 @@
 #define OFFSET(x) offsetof(TfencContext, x)
 #define VE AV_OPT_FLAG_VIDEO_PARAM | AV_OPT_FLAG_ENCODING_PARAM
 static const AVOption options[] = {
+    { "dev",      "device to be used for encoding", OFFSET(tf_dev), AV_OPT_TYPE_STRING, { .str = "/dev/al_enc" }, 0, 0, VE },
+    { "rc",           "Override the preset rate-control",   OFFSET(rc),           AV_OPT_TYPE_INT,   { .i64 = RC_CBR },                                  -1, INT_MAX, VE, "rc" },
+    { "vbr",          "Variable bitrate mode",              0,                    AV_OPT_TYPE_CONST, { .i64 = RC_VBR },                       0, 0, VE, "rc" },
+    { "cbr",          "Constant bitrate mode",              0,                    AV_OPT_TYPE_CONST, { .i64 = RC_CBR },                       0, 0, VE, "rc" },
+    
     { NULL }
 };
 const AVCodecHWConfigInternal *const ff_tfenc_hw_configs[] = {
@@ -39,7 +44,7 @@ static const AVCodecDefault defaults[] = {
     { "qdiff", "-1" },
     { "qblur", "-1" },
     { "qcomp", "-1" },
-    { "g", "250" },
+    { "g", "50" },
     { "bf", "-1" },
     { "refs", "0" },
     { NULL },
@@ -69,7 +74,7 @@ static int output_ready(AVCodecContext *avctx, int flush)
     int nb_ready;
 
     nb_ready = av_fifo_size(ctx->output_buffer_ready_queue)   / sizeof(TfencBuffer*);
-    return nb_ready > 0;
+    return nb_ready;
 }
 static void ff_tfenc_callback(void *user_param, void *data, int len)
 {
@@ -81,6 +86,9 @@ static void ff_tfenc_callback(void *user_param, void *data, int len)
     buffer->len = len;
 
     memcpy(buffer->data,data,len);
+
+    int bufsize = output_ready(avctx,0);
+    // av_log(avctx, AV_LOG_WARNING, "%s [in] %d\n", __func__,bufsize);
 
     // thread-safe?
     // out of range?
@@ -97,11 +105,32 @@ static av_cold int tfenc_setup_device(AVCodecContext *avctx)
     setting.pix_format = PIXFMT_NV12;
     setting.width = avctx->width;
     setting.height = avctx->height;
-    setting.profile = PROFILE_AVC_MAIN;
+
+    switch (avctx->codec->id) {
+    case AV_CODEC_ID_H264:
+        setting.profile = PROFILE_AVC_MAIN;
+        break;
+    case AV_CODEC_ID_HEVC:
+        setting.profile = PROFILE_HEVC_MAIN;
+        break;
+    default:
+        return AVERROR_BUG;
+    }
+    
+    
     setting.level = 51;
-    setting.bit_rate = 4000000 * 4;
-    setting.max_bit_rate = 10000000 * 4;
-    setting.gop = 50;
+    if(avctx->bit_rate > 0)
+        setting.bit_rate = avctx->bit_rate;
+    else
+        setting.bit_rate = 400000*4;
+
+
+    if(avctx->rc_max_rate > 0)
+        setting.max_bit_rate = avctx->rc_max_rate;
+    else
+        setting.max_bit_rate = setting.bit_rate * 4;
+
+    setting.gop = avctx->gop_size >= 0?avctx->gop_size:60;
     
 
     if (avctx->framerate.num > 0 && avctx->framerate.den > 0) {
@@ -110,8 +139,15 @@ static av_cold int tfenc_setup_device(AVCodecContext *avctx)
         setting.frame_rate = avctx->time_base.den / (avctx->time_base.num * avctx->ticks_per_frame);
     }
     
-    setting.device_id = 0;
-    setting.rc_mode   = RC_CBR;
+    int device = 0;
+    if(strcmp(ctx->tf_dev,"/dev/al_enc") == 0){
+        device = 0;
+    }else{
+        sscanf(ctx->tf_dev,"/dev/al_enc%d",&device);
+        device --;
+    }
+    setting.device_id = device;
+    setting.rc_mode   = ctx->rc;
 
 
 
@@ -123,12 +159,12 @@ static av_cold int tfenc_setup_device(AVCodecContext *avctx)
 
     ret = tfenc_encoder_create(&ctx->handle, &setting, cb);
 
-    if (ret < 0){
-        printf("create tfenc failed!\n");
+    if (ret != TFENC_SUCCESS){
+        av_log(avctx, AV_LOG_ERROR, "create tfenc [%s] [%d] [%d] [%d] [%d] failed \n",ctx->tf_dev,setting.device_id,setting.gop,setting.rc_mode,setting.bit_rate);
         ctx->handle = NULL;
-        return -1;
+        return AVERROR_EXTERNAL;
     }else{
-        printf("create tfenc success ,handle %p\n",ctx->handle);
+        av_log(avctx, AV_LOG_WARNING, "create tfenc [%s] [%d] [%d] [%d] [%d] success \n",ctx->tf_dev,setting.device_id,setting.gop,setting.rc_mode,setting.bit_rate);
         return 0;
     }
 }
@@ -300,6 +336,8 @@ static int tfenc_send_frame(AVCodecContext *avctx, const AVFrame *frame)
 
         // free(input);
     } else {
+
+        //EOS
     }
 
     // av_log(avctx, AV_LOG_WARNING, "%s [out]\n", __func__);
@@ -334,7 +372,19 @@ static int process_output_buffer(AVCodecContext *avctx, AVPacket *pkt, TfencBuff
     }
     memcpy(pkt->data, buf->data, buf->len);
 
-    if(analyzeh264Frame(buf->data,buf->len < 1000?buf->len:1000)) {
+    int maxlen = 1000;
+    int nal_type;
+
+    if(buf->len < maxlen)
+        maxlen = buf->len;
+
+    if(AV_CODEC_ID_H264 == avctx->codec->id) {
+        nal_type = analyzeh264Frame(buf->data,maxlen);
+    }else{
+        nal_type = analyzeh265Frame(buf->data,maxlen);
+    }
+
+    if(nal_type) {
         pkt->flags |= AV_PKT_FLAG_KEY;
         pict_type = AV_PICTURE_TYPE_I;
         // printf("[wx] frameI %d\n",buf->len);
@@ -442,5 +492,28 @@ AVCodec ff_h264_tfenc_encoder = {
     .caps_internal  = FF_CODEC_CAP_INIT_CLEANUP,    
     .pix_fmts       = ff_tf_enc_pix_fmts,
     .wrapper_name   = "tfenc",
-    .hw_configs     = ff_tfenc_hw_configs,
+};
+static const AVClass hevc_tfenc_class = {
+    .class_name = "hevc_tfenc",
+    .item_name = av_default_item_name,
+    .option = options,
+    .version = LIBAVUTIL_VERSION_INT,
+};
+AVCodec ff_hevc_tfenc_encoder = {
+    .name           = "hevc_tfenc",
+    .long_name      = NULL_IF_CONFIG_SMALL("TFENC Hevc Encoder"),
+    .type           = AVMEDIA_TYPE_VIDEO,
+    .id             = AV_CODEC_ID_HEVC,
+    .init           = ff_tf_enc_init,
+    .receive_packet = ff_tf_enc_receive_packet,
+    .close          = ff_tf_enc_close,
+    .flush          = ff_tf_encode_flush,
+    .priv_data_size = sizeof(TfencContext),
+    .priv_class     = &hevc_tfenc_class,
+    .defaults       = defaults,
+    .capabilities   = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_HARDWARE |
+                      AV_CODEC_CAP_ENCODER_FLUSH | AV_CODEC_CAP_DR1,
+    .caps_internal  = FF_CODEC_CAP_INIT_CLEANUP,    
+    .pix_fmts       = ff_tf_enc_pix_fmts,
+    .wrapper_name   = "tfenc",
 };
