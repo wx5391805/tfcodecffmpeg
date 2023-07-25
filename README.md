@@ -1,3 +1,96 @@
+FFmpeg with tfcodec
+=============
+FFmpeg 集成libtfdec+libtfenc 硬件编解码库，可在使用ffmpeg命令行工具、API 进行编解码时获得硬件加速
+
+在Thinkforce 7140/7180系列服务器编译、运行
+
+支持各类Linux操作系统
+
+## 环境准备
+
+以ubuntu为例, 要求gcc 9.4以上
+
+1.下载tfdl2 sdk 解压到 `tfdl2` <链接>
+
+2.安装编解码器驱动，重启服务器后需重复上述脚本，注意管理员权限
+``` sh
+sudo tfdl2/driver/codec/buildTFCoderDriver.sh 
+sudo tfdl2/tfenc/tfenc_service
+```
+
+使用 `lsmod | grep mve` 可看到 `mve_driver*`字样说明驱动安装成功
+
+使用`ps -ef | grep tfenc` 可看到后台`tfenc_service`服务
+
+## 使用预编译包
+
+解压ffmpeg-tfcodec预编译包
+``` sh
+tar -zxvf ffmpeg.tar.gz
+.
+├── bin        --可执行文件
+├── include    --头文件
+├── lib        --库文件
+├── share      
+└── test       --测试文件
+```
+
+### 解码
+
+将`MP4/avc`文件解码为`yuv420p` raw data
+
+``` sh
+./test.tfvid.sh
+#../bin/ffmpeg -c:v h264_tfvid -dev /dev/mv500 -i ./IMG_1224.MP4  -pix_fmt yuv420p ./output$i.yuv
+```
+可看到` Stream #0:0 -> #0:0 (h264 (h264_tfvid) -> rawvideo (native))`打印，说明成功调用h264_tfvid 解码器，可看到fps等信息:
+
+`frame= 2137 fps=306 q=-0.0 Lsize= 6491138kB time=00:01:25.48 bitrate=622080.0kbits/s dup=0 drop=1 speed=12.2x`
+
+参数说明:
+
+`-c:v` 指定解码器为`h264_tfvid`硬件h264解码器，可使用`c:v h264`则为ffmpeg原生软件解码器
+
+`-dev` 指定解码器设备
+
+### 编码
+`./test.tfenc.sh` 将`nv12`raw data 编码为h264/hevc 
+
+多进程同时编码，总fps约等于每个fps打印的累加
+
+参数说明:
+
+`-c:v` 指定编码器为`h264_tfenc`硬件h264编码器，`hevc_tfenc` 为h265编码器
+
+`-dev` 指定编码器设备
+
+其他配置参见libavcode说明文件
+
+### 转码
+`./test.transcode.sh`
+
+使用tfvid解码，再用tfenc重新编码mp4，生成新的mp4视频
+
+## 
+
+## 编译安装
+
+基本需求gcc 9.4以上，并确保有`tfdl2 sdk`,其他依赖一般是可选项，参考ffmpeg通用编译方法
+
+以Ubuntu为例，clone代码切换到对应分支执行：
+
+``` sh
+./configure --prefix=~/ffmpeg/  --extra-cflags="-I/home/wx/tfdl2/" --extra-ldflags="-L/home/wx/tfdl2/tfenc -L/home/wx/tfdl2/tfdec "
+make -j40
+make install
+```
+
+将`/home/wx/tfdl2`改成自己tfdl2 sdk路径
+
+即可在~/ffmpeg 生成安装包
+
+# ==========End============
+
 FFmpeg README
 =============
 
