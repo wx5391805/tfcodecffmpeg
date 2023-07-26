@@ -33,7 +33,7 @@ sudo thinkfs/tfdl2/tfenc/tfenc_service
 
 ## 使用
 
-解压ffmpeg-tfcodec预编译包，或者先[编译](#编译)
+解压ffmpeg-tfcodec预编译包，或者先[编译](#编译安装)
 ``` sh
 tar -zxvf ffmpeg.tar.gz
 .
