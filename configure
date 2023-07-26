@@ -3780,7 +3780,6 @@ incdir_default='${prefix}/include'
 libdir_default='${prefix}/lib'
 mandir_default='${prefix}/share/man'
 testdir_default='${prefix}/test'
-tfdldir_default='$source_path/thinkfs/tfdl2'
 
 # toolchain
 ar_default="ar"
@@ -3910,6 +3909,8 @@ else
     test -e "$source_path/config.h" &&
         die "Out of tree builds are impossible with config.h in source dir."
 fi
+
+tfdldir_default=${source_path}/thinkfs/tfdl2sdk/tfdl2
 
 for v in "$@"; do
     r=${v#*=}
@@ -5754,6 +5755,7 @@ set_default libdir
 
 set_default $PATHS_LIST
 set_default nm
+
 
 disabled optimizations || enabled ossfuzz || check_cflags -fomit-frame-pointer
 

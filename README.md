@@ -17,7 +17,6 @@ git clone https://github.com/wx5391805/tfcodecffmpeg.git
 cd ffmpeg
 git submodule init
 git submodule update
-tar -zxvf thinkfs/tfdl2sdk/*.tar.gz -C thinkfs/tfdl2sdk
 ```
 
 2.安装编解码器驱动，重启服务器后需重复上述脚本，注意管理员权限
