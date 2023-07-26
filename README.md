@@ -10,12 +10,21 @@ FFmpeg 集成libtfdec+libtfenc 硬件编解码库，可在使用ffmpeg命令行�
 
 以ubuntu为例, 要求gcc 9.4以上
 
-1.下载tfdl2 sdk 解压到 `tfdl2` <链接>
+1.clone代码，下载tfdl2 sdk
+
+``` sh
+git clone https://github.com/wx5391805/tfcodecffmpeg.git
+cd ffmpeg
+git submodule init
+git submodule update
+tar -zxvf thinkfs/tfdl2sdk/*.tar.gz -C thinkfs/
+#也可手动将`tfdl2`拷贝到 thinkfs 目录下
+```
 
 2.安装编解码器驱动，重启服务器后需重复上述脚本，注意管理员权限
 ``` sh
-sudo tfdl2/driver/codec/buildTFCoderDriver.sh 
-sudo tfdl2/tfenc/tfenc_service
+sudo thinkfs/tfdl2/driver/codec/buildTFCoderDriver.sh 
+sudo thinkfs/tfdl2/tfenc/tfenc_service
 ```
 
 使用 `lsmod | grep mve` 可看到 `mve_driver*`字样说明驱动安装成功
@@ -80,14 +89,12 @@ tar -zxvf ffmpeg.tar.gz
 以Ubuntu为例，clone代码切换到对应分支执行：
 
 ``` sh
-./configure --prefix=~/ffmpeg/  --extra-cflags="-I/home/wx/tfdl2/" --extra-ldflags="-L/home/wx/tfdl2/tfenc -L/home/wx/tfdl2/tfdec "
+./configure --prefix=/opt/ffmpeg/  #如果要单独指定tfdl位置，添加 --tfdldir=/path/to/tfdl2/, 否则默认在 ffmpeg/thinkfs/tfdl2
 make -j40
 make install
 ```
 
-将`/home/wx/tfdl2`改成自己tfdl2 sdk路径
-
-即可在~/ffmpeg 生成安装包
+即可在/opt/ffmpeg 生成安装包
 
 # ==========End============
 
