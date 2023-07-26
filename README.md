@@ -31,9 +31,9 @@ sudo thinkfs/tfdl2/tfenc/tfenc_service
 
 使用`ps -ef | grep tfenc` 可看到后台`tfenc_service`服务
 
-## 使用预编译包
+## 使用
 
-解压ffmpeg-tfcodec预编译包
+解压ffmpeg-tfcodec预编译包，或者先[编译](#编译)
 ``` sh
 tar -zxvf ffmpeg.tar.gz
 .
@@ -42,6 +42,7 @@ tar -zxvf ffmpeg.tar.gz
 ├── lib        --库文件
 ├── share      
 └── test       --测试文件
+cd test
 ```
 
 ### 解码
