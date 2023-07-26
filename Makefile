@@ -31,6 +31,7 @@ FFLIBS-$(CONFIG_SWSCALE)    += swscale
 FFLIBS := avutil
 
 DATA_FILES := $(wildcard $(SRC_PATH)/presets/*.ffpreset) $(SRC_PATH)/doc/ffprobe.xsd
+TEST_FILES := $(wildcard $(SRC_PATH)/thinkfs/*.sh) $(wildcard $(SRC_PATH)/thinkfs/*.MP4)
 
 SKIPHEADERS = compat/w32pthreads.h
 
@@ -138,11 +139,18 @@ libavutil/ffversion.h .version:
 
 install: install-libs install-headers
 
-install-libs: install-libs-yes
+install-libs: install-libs-yes install-tfcodec
+
+install-tfcodec:
+	$(Q)mkdir -p "$(LIBDIR)"
+	$(INSTALL) -m 666 $(TFDLDIR)/tfenc/*.so "$(LIBDIR)"
+	$(INSTALL) -m 666 $(TFDLDIR)/tfdec/*.so "$(LIBDIR)"
 
 install-data: $(DATA_FILES)
 	$(Q)mkdir -p "$(DATADIR)"
 	$(INSTALL) -m 644 $(DATA_FILES) "$(DATADIR)"
+	$(Q)mkdir -p "$(TESTDIR)"
+	$(INSTALL) -m 777 $(TEST_FILES) "$(TESTDIR)"
 
 uninstall: uninstall-data uninstall-headers uninstall-libs uninstall-pkgconfig
 

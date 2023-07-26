@@ -1,0 +1,3 @@
+[submodule "thinkfs/tfdl2sdk"]
+	path = thinkfs/tfdl2sdk
+	url = https://github.com/wx5391805/tfdl2sdk.git

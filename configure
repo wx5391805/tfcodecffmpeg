@@ -394,6 +394,7 @@ Toolchain options:
   --host-ldflags=HLDFLAGS  use HLDFLAGS when linking for host
   --host-extralibs=HLIBS   use libs HLIBS when linking for host
   --host-os=OS             compiler host OS [$target_os]
+  --tfdl-path=TFDLPATH     specify path of tfdl2
   --extra-cflags=ECFLAGS   add ECFLAGS to CFLAGS [$CFLAGS]
   --extra-cxxflags=ECFLAGS add ECFLAGS to CXXFLAGS [$CXXFLAGS]
   --extra-objcflags=FLAGS  add FLAGS to OBJCFLAGS [$CFLAGS]
@@ -2462,6 +2463,8 @@ CMDLINE_SELECT="
 PATHS_LIST="
     bindir
     datadir
+    tfdldir
+    testdir
     docdir
     incdir
     libdir
@@ -3776,6 +3779,8 @@ docdir_default='${prefix}/share/doc/ffmpeg'
 incdir_default='${prefix}/include'
 libdir_default='${prefix}/lib'
 mandir_default='${prefix}/share/man'
+testdir_default='${prefix}/test'
+tfdldir_default='$source_path/thinkfs/tfdl2'
 
 # toolchain
 ar_default="ar"
@@ -6805,13 +6810,13 @@ void f(void) { struct { const GUID guid; } s[] = { { NV_ENC_PRESET_HQ_GUID } }; 
 int main(void) { return 0; }
 EOF
 
+add_cflags -I$tfdldir
+add_ldflags -L$tfdldir/tfenc
+add_ldflags -L$tfdldir/tfdec
+
 enabled tfenc && 
-    add_cppflags '-I/home/wx/tfdl2' &&
-    add_ldflags '-L/home/wx/tfdl2/tfenc' && 
     require tfenc tfenc/tfenc_api.h tfenc_encoder_create -ltfenc
 enabled tfvid && 
-    add_cppflags '-I/home/wx/tfdl2' &&
-    add_ldflags '-L/home/wx/tfdl2/tfdec' && 
     require tfvid tfdec/libtfdec.h tfdec_create -ltfdec
 
 if enabled_any nvdec cuvid; then
@@ -7479,6 +7484,8 @@ BINDIR=\$(DESTDIR)$bindir
 DATADIR=\$(DESTDIR)$datadir
 DOCDIR=\$(DESTDIR)$docdir
 MANDIR=\$(DESTDIR)$mandir
+TESTDIR=\$(DESTDIR)$testdir
+TFDLDIR=$tfdldir
 PKGCONFIGDIR=\$(DESTDIR)$pkgconfigdir
 INSTALL_NAME_DIR=$install_name_dir
 SRC_PATH=$source_path
