@@ -14,15 +14,15 @@ FFmpeg 集成libtfdec+libtfenc 硬件编解码库，可在使用ffmpeg命令行�
 
 ``` sh
 git clone https://github.com/wx5391805/tfcodecffmpeg.git
-cd ffmpeg
+cd tfcodecffmpeg
 git submodule init
 git submodule update
 ```
 
 2.安装编解码器驱动，重启服务器后需重复上述脚本，注意管理员权限
 ``` sh
-sudo thinkfs/tfdl2/driver/codec/buildTFCoderDriver.sh 
-sudo thinkfs/tfdl2/tfenc/tfenc_service
+sudo thinkfs/tfdl2sdk/tfdl2/driver/codec/buildTFCoderDriver.sh 
+sudo thinkfs/tfdl2sdk/tfdl2/tfenc/tfenc_service
 ```
 
 使用 `lsmod | grep mve` 可看到 `mve_driver*`字样说明驱动安装成功
