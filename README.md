@@ -17,8 +17,7 @@ git clone https://github.com/wx5391805/tfcodecffmpeg.git
 cd ffmpeg
 git submodule init
 git submodule update
-tar -zxvf thinkfs/tfdl2sdk/*.tar.gz -C thinkfs/
-#也可手动将`tfdl2`拷贝到 thinkfs 目录下
+tar -zxvf thinkfs/tfdl2sdk/*.tar.gz -C thinkfs/tfdl2sdk
 ```
 
 2.安装编解码器驱动，重启服务器后需重复上述脚本，注意管理员权限
@@ -90,7 +89,7 @@ cd test
 以Ubuntu为例，clone代码切换到对应分支执行：
 
 ``` sh
-./configure --prefix=/opt/ffmpeg/  #如果要单独指定tfdl位置，添加 --tfdldir=/path/to/tfdl2/, 否则默认在 ffmpeg/thinkfs/tfdl2
+./configure --prefix=/opt/ffmpeg/  #如果要单独指定tfdl位置，添加 --tfdldir=/path/to/tfdl2/, 否则默认在 ffmpeg/thinkfs/tfdl2sdk/tfdl2
 make -j40
 make install
 ```
