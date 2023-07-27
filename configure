@@ -6812,7 +6812,7 @@ void f(void) { struct { const GUID guid; } s[] = { { NV_ENC_PRESET_HQ_GUID } }; 
 int main(void) { return 0; }
 EOF
 
-add_cflags -I$tfdldir
+add_cflags -I$tfdldir -pthread
 add_ldflags -L$tfdldir/tfenc
 add_ldflags -L$tfdldir/tfdec
 

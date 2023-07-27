@@ -191,7 +191,7 @@ static av_cold int ff_tf_enc_init(AVCodecContext *avctx)
  
 static av_cold int ff_tf_enc_close(AVCodecContext *avctx)
 {
-    av_log(avctx, AV_LOG_WARNING, "%s [in]\n", __func__);
+    // av_log(avctx, AV_LOG_WARNING, "%s [in]\n", __func__);
 
     TfencContext *ctx = avctx->priv_data;
 
@@ -214,7 +214,7 @@ static av_cold int ff_tf_enc_close(AVCodecContext *avctx)
     if(ctx->handle)
         tfenc_encoder_destroy(ctx->handle);
 
-    av_log(avctx, AV_LOG_WARNING, "%s [out]\n", __func__);
+    // av_log(avctx, AV_LOG_WARNING, "%s [out]\n", __func__);
  
     return 0;
 }

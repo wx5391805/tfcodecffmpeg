@@ -158,7 +158,7 @@ static av_cold int tfvid_decode_end(AVCodecContext *avctx)
 
     ctx->closed = 1;
 
-    av_log(avctx, AV_LOG_WARNING, "%s [in]\n", __func__);
+    // av_log(avctx, AV_LOG_WARNING, "%s [in]\n", __func__);
 
     // av_log(avctx, AV_LOG_ERROR, "end 0 %p %lu\n",ctx->handle,(unsigned long)pthread_self());
 
@@ -183,7 +183,7 @@ static av_cold int tfvid_decode_end(AVCodecContext *avctx)
     
 
     av_freep(&ctx->key_frame);
-    av_log(avctx, AV_LOG_WARNING, "%s [out]\n", __func__);
+    // av_log(avctx, AV_LOG_WARNING, "%s [out]\n", __func__);
     return 0;
 }
 static av_cold int tfvid_decode_init(AVCodecContext *avctx)
