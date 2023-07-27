@@ -29,11 +29,26 @@ sudo thinkfs/tfdl2sdk/tfdl2/tfenc/tfenc_service
 
 使用`ps -ef | grep tfenc` 可看到后台`tfenc_service`服务
 
+## 编译
+
+基本需求gcc 9.4以上，并确保有`tfdl2 sdk`,其他依赖一般是可选项，参考ffmpeg通用编译方法
+
+以Ubuntu为例，clone代码切换到对应分支执行：
+
+``` sh
+./configure --prefix=/opt/ffmpeg/  #如果要单独指定tfdl位置，添加 --tfdldir=/path/to/tfdl2/, 否则默认在 ffmpeg/thinkfs/tfdl2sdk/tfdl2
+make -j40
+make install
+```
+
+即可在/opt/ffmpeg 生成安装包
+
 ## 使用
 
-解压ffmpeg-tfcodec预编译包，或者先[编译](#编译安装)
+解压ffmpeg-tfcodec预编译包，或者[编译](#编译安装) 完成进入安装目录
 ``` sh
 tar -zxvf ffmpeg.tar.gz
+#或者 cd /opt/ffmpeg
 .
 ├── bin        --可执行文件
 ├── include    --头文件
@@ -51,28 +66,47 @@ cd test
 ./test.tfvid.sh
 #../bin/ffmpeg -c:v h264_tfvid -dev /dev/mv500 -i ./IMG_1224.MP4  -pix_fmt yuv420p ./output$i.yuv
 ```
-可看到` Stream #0:0 -> #0:0 (h264 (h264_tfvid) -> rawvideo (native))`打印，说明成功调用h264_tfvid 解码器，可看到fps等信息:
+可看到
 
-`frame= 2137 fps=306 q=-0.0 Lsize= 6491138kB time=00:01:25.48 bitrate=622080.0kbits/s dup=0 drop=1 speed=12.2x`
+` Stream #0:0 -> #0:0 (h264 (h264_tfvid) -> rawvideo (native))`
 
-参数说明:
+打印，说明成功调用h264_tfvid 解码器，可看到fps等信息:
+
+`frame= 2072 fps=668 q=-0.0 Lsize=N/A time=00:01:25.65 bitrate=N/A speed=27.6x`
+
+#### 参数说明:
 
 `-c:v` 指定解码器为`h264_tfvid`硬件h264解码器，可使用`c:v h264`则为ffmpeg原生软件解码器
 
 `-dev` 指定解码器设备
+
+#### 性能：
+
+| FFMPEG解码(1080P MP4 (h264 Main) -> yuvI420) | 7140单芯片 | 7140双芯片 |
+|---------|---------|---------|
+|   tfvid |   1998 fps |   3872fps |
+|   cuvid（NVIDIA GTX3090） |   772fps |   / |
+
 
 ### 编码
 `./test.tfenc.sh` 将`nv12`raw data 编码为h264/hevc 
 
 多进程同时编码，总fps约等于每个fps打印的累加
 
-参数说明:
+#### 参数说明:
 
 `-c:v` 指定编码器为`h264_tfenc`硬件h264编码器，`hevc_tfenc` 为h265编码器
 
 `-dev` 指定编码器设备
 
 其他配置参见libavcode说明文件
+
+#### 性能：
+
+| FFMPEG编码(1080P raw NV12) -> h264(Main)) | 7140单芯片 | 7140双芯片 |
+|---------|---------|---------|
+|   tfenc |   400fps fps |   762fps |
+|   nvenc（NVIDIA GTX3090） |   470fps |   / |
 
 ### 转码
 `./test.transcode.sh`
@@ -81,19 +115,7 @@ cd test
 
 ## 
 
-## 编译安装
 
-基本需求gcc 9.4以上，并确保有`tfdl2 sdk`,其他依赖一般是可选项，参考ffmpeg通用编译方法
-
-以Ubuntu为例，clone代码切换到对应分支执行：
-
-``` sh
-./configure --prefix=/opt/ffmpeg/  #如果要单独指定tfdl位置，添加 --tfdldir=/path/to/tfdl2/, 否则默认在 ffmpeg/thinkfs/tfdl2sdk/tfdl2
-make -j40
-make install
-```
-
-即可在/opt/ffmpeg 生成安装包
 
 # ==========End============
 
