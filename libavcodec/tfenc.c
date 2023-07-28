@@ -87,12 +87,20 @@ static void ff_tfenc_callback(void *user_param, void *data, int len)
 
     memcpy(buffer->data,data,len);
 
-    int bufsize = output_ready(avctx,0);
+    // int bufsize = output_ready(avctx,0);
     // av_log(avctx, AV_LOG_WARNING, "%s [in] %d\n", __func__,bufsize);
 
-    // thread-safe?
+    // thread-safe? do1
     // out of range?
+
+    pthread_mutex_lock(&ctx->mutex); 
+    if(ctx->closed){
+        av_log(avctx, AV_LOG_WARNING, "%s callback after end \n", __func__);
+        goto err;
+    }
     av_fifo_generic_write(ctx->output_buffer_ready_queue, &buffer, sizeof(buffer), NULL);
+err:
+    pthread_mutex_unlock(&ctx->mutex); 
 }
 static av_cold int tfenc_setup_device(AVCodecContext *avctx)
 {
@@ -184,6 +192,7 @@ static av_cold int ff_tf_enc_init(AVCodecContext *avctx)
     if ((ret = tfenc_setup_surfaces(avctx)) < 0)
         return ret;
     
+    ctx->closed = 0;
     
     av_log(avctx, AV_LOG_WARNING, "%s [out] \n", __func__);
     return 0;
@@ -198,6 +207,9 @@ static av_cold int ff_tf_enc_close(AVCodecContext *avctx)
     //TODO check thread safe
     //TODO check leaky output buffer // do1
 
+    ctx->closed = 1;
+    pthread_mutex_lock(&ctx->mutex);  
+
     TfencBuffer* out_buf;
     while (output_ready(avctx, avctx->internal->draining)) {
         av_fifo_generic_read(ctx->output_buffer_ready_queue, &out_buf, sizeof(out_buf), NULL);
@@ -206,10 +218,11 @@ static av_cold int ff_tf_enc_close(AVCodecContext *avctx)
         free(out_buf);
     }
 
-    av_fifo_freep(&ctx->timestamp_list);
     av_fifo_freep(&ctx->output_buffer_ready_queue);
+    pthread_mutex_unlock(&ctx->mutex);
 
-    free(ctx->inputBuffer);
+    av_fifo_freep(&ctx->timestamp_list);
+    free(ctx->inputBuffer); 
 
     if(ctx->handle)
         tfenc_encoder_destroy(ctx->handle);

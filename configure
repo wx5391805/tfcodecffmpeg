@@ -6817,7 +6817,7 @@ add_ldflags -L$tfdldir/tfenc
 add_ldflags -L$tfdldir/tfdec
 
 enabled tfenc && 
-    require tfenc tfenc/tfenc_api.h tfenc_encoder_create -ltfenc
+    require tfenc tfenc/tfenc_api.h tfenc_encoder_create -ltfenc -pthread
 enabled tfvid && 
     require tfvid tfdec/libtfdec.h tfdec_create -ltfdec -pthread
 
