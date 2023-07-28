@@ -6812,14 +6812,14 @@ void f(void) { struct { const GUID guid; } s[] = { { NV_ENC_PRESET_HQ_GUID } }; 
 int main(void) { return 0; }
 EOF
 
-add_cflags -I$tfdldir -pthread
+add_cflags -I$tfdldir 
 add_ldflags -L$tfdldir/tfenc
 add_ldflags -L$tfdldir/tfdec
 
 enabled tfenc && 
     require tfenc tfenc/tfenc_api.h tfenc_encoder_create -ltfenc
 enabled tfvid && 
-    require tfvid tfdec/libtfdec.h tfdec_create -ltfdec
+    require tfvid tfdec/libtfdec.h tfdec_create -ltfdec -pthread
 
 if enabled_any nvdec cuvid; then
     check_type "ffnvcodec/dynlink_cuda.h ffnvcodec/dynlink_cuviddec.h" "CUVIDAV1PICPARAMS"
