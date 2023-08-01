@@ -805,6 +805,7 @@ extern AVCodec ff_nvenc_hevc_encoder;
 #endif
 extern AVCodec ff_hevc_amf_encoder;
 extern AVCodec ff_hevc_cuvid_decoder;
+extern AVCodec ff_hevc_tfvid_decoder;
 extern AVCodec ff_hevc_mediacodec_decoder;
 extern AVCodec ff_hevc_mf_encoder;
 extern AVCodec ff_hevc_nvenc_encoder;

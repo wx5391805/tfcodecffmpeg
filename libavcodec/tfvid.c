@@ -83,8 +83,10 @@ static void ff_tfdec_callback(TFDEC_HANDLE session, void * buffer, int size, uns
     memcpy(frame.data,buffer,size);
 
     pthread_mutex_lock(&ctx->mutex);  
-    if(ctx->closed)
+    if(ctx->closed){
+        av_log(avctx, AV_LOG_WARNING, "%s callback after end ,len %d\n", __func__,size);
         goto end;
+    }
     while(tfvid_is_buffer_full(avctx)){
 
         //'output buffer full warnning'
@@ -93,8 +95,10 @@ static void ff_tfdec_callback(TFDEC_HANDLE session, void * buffer, int size, uns
 
         usleep(1000);
         pthread_mutex_lock(&ctx->mutex);  
-        if(ctx->closed)
+        if(ctx->closed){
+            av_log(avctx, AV_LOG_WARNING, "%s callback after end ,len %d\n", __func__,size);
             goto end;
+        }
     }
     av_fifo_generic_write(ctx->frame_queue, &frame, sizeof(TfvidParsedFrame), NULL);
     tfdec_return_output(session,buffer);
@@ -300,7 +304,7 @@ static av_cold int tfvid_decode_init(AVCodecContext *avctx)
     }
 
     // set out buffers > input buffers, avoid the aka @'output buffer full warnning'
-    ctx->nb_outbuffers = tfdec_query_input_queue(ctx->handle);
+    ctx->nb_outbuffers = tfdec_query_input_queue(ctx->handle) + 5;
     ctx->frame_queue = av_fifo_alloc(ctx->nb_outbuffers * sizeof(TfvidParsedFrame));
     av_log(avctx, AV_LOG_WARNING, "decode queue init size %d, max %d \n",av_fifo_size(ctx->frame_queue),ctx->nb_outbuffers);
     if (!ctx->frame_queue) {
@@ -602,6 +606,10 @@ static const AVCodecHWConfigInternal *const tfvid_hw_configs[] = {
         .hw_configs     = tfvid_hw_configs, \
         .wrapper_name   = "tfvid", \
     };
+
+#if CONFIG_HEVC_TFVID_DECODER
+DEFINE_TFVID_CODEC(hevc, HEVC, "hevc_mp4toannexb")
+#endif
 #if CONFIG_H264_TFVID_DECODER
 DEFINE_TFVID_CODEC(h264, H264, "h264_mp4toannexb")
 #endif

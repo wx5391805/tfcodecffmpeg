@@ -1,15 +1,7 @@
 #!/bin/bash
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:../lib
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:../lib:/home/wx/wx/ssd/gitlab/ESAC/cprovider/cefprovider/cefprovider/encoder/x264/lib/
 
-for i in {1..1}
-do
-# comment numactl for better performance
-#  numactl --cpunodebind=0 --localalloc \
-../bin/ffmpeg  -c:v h264_tfvid  -i ./IMG_1224.MP4 -bf 0  -c:v h264_tfenc -c:a copy ./output$i.MP4 &
-done
+../bin/ffmpeg -nostdin -y -c:v h264_tfvid  -i ./IMG_1224.MP4 -bf 0  -c:v h264_tfenc -c:a copy ./output.MP4
 
-#sleep 5
-wait
-
-echo ---------------------------------------------------------------------
+echo ----------------------------------end-----------------------------------
 

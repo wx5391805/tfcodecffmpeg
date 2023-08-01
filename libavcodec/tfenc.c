@@ -95,7 +95,7 @@ static void ff_tfenc_callback(void *user_param, void *data, int len)
 
     pthread_mutex_lock(&ctx->mutex); 
     if(ctx->closed){
-        av_log(avctx, AV_LOG_WARNING, "%s callback after end \n", __func__);
+        av_log(avctx, AV_LOG_WARNING, "%s callback after end ,len %d\n", __func__,len);
         goto err;
     }
     av_fifo_generic_write(ctx->output_buffer_ready_queue, &buffer, sizeof(buffer), NULL);
