@@ -14,20 +14,26 @@ FFmpeg 集成libtfdec+libtfenc 硬件编解码库，可在使用ffmpeg命令行�
 
 ``` sh
 git clone https://github.com/wx5391805/tfcodecffmpeg.git
-cd tfcodecffmpeg
-git submodule init
-git submodule update
 ```
 
-2.安装编解码器驱动，重启服务器后需重复上述脚本，注意管理员权限
+2.获取tfdl2 SDK,解压到`root/tfdl2`
+
+
+3.安装编解码器驱动，需要管理员权限
 ``` sh
-sudo thinkfs/tfdl2sdk/tfdl2/driver/codec/buildTFCoderDriver.sh 
-sudo thinkfs/tfdl2sdk/tfdl2/tfenc/tfenc_service
+sudo /root/tfdl2/driver/codec/buildTFCoderDriver.sh 
 ```
 
-使用 `lsmod | grep mve` 可看到 `mve_driver*`字样说明驱动安装成功
+使用 `lsmod | grep -E "mve_driver|al_module"` 可查看内核驱动是否安装成功
+
+
+4.启动编码服务进程，需要管理员权限，重启机器后需要手动运行
+``` sh
+sudo /root/tfdl2/tfenc/tfenc_service
+```
 
 使用`ps -ef | grep tfenc` 可看到后台`tfenc_service`服务
+
 
 ## 编译
 
@@ -36,7 +42,7 @@ sudo thinkfs/tfdl2sdk/tfdl2/tfenc/tfenc_service
 以Ubuntu为例，clone代码切换到对应分支执行：
 
 ``` sh
-./configure --prefix=/opt/ffmpeg/  #如果要单独指定tfdl位置，添加 --tfdldir=/path/to/tfdl2/, 否则默认在 ffmpeg/thinkfs/tfdl2sdk/tfdl2
+./configure --prefix=/opt/ffmpeg/ --tfdldir=/root/tfdl2/
 make -j40
 make install
 ```
@@ -47,16 +53,14 @@ make install
 
 解压ffmpeg-tfcodec预编译包，或者[编译](#编译安装) 完成进入安装目录
 ``` sh
-tar -zxvf ffmpeg.tar.gz
-#或者 cd /opt/ffmpeg
-.
 ├── bin        --可执行文件
 ├── include    --头文件
 ├── lib        --库文件
 ├── share      
 └── test       --测试文件
-cd test
 ```
+进入测试目录
+cd /opt/ffmpeg/test
 
 ### 解码
 
@@ -89,6 +93,7 @@ cd test
 | cuvid（NVIDIA GTX3090）          | 772           |
 | 7140 软件(h264/libx264)          | 2904          |
 
+TIPS:性能受根据cpu和ddr频率影响，结果为各个进程结果fps简单相加
 
 
 ### 编码
