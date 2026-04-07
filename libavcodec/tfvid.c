@@ -24,10 +24,13 @@ typedef struct TfvidContext
     int decoder_flushing;
     int nb_inbuffers;
     int nb_outbuffers;
+    int input_queue_capacity;
     AVFifoBuffer *frame_queue;
     int codec_type;
     pthread_mutex_t mutex;
     volatile int closed;
+    volatile int eos_sent;
+    volatile int eos_received;
 
     char *crop_expr;
     char *resize_expr;
@@ -71,22 +74,38 @@ static int tfvid_is_buffer_full(AVCodecContext *avctx)
 static void ff_tfdec_callback(TFDEC_HANDLE session, void * buffer, int size, unsigned long timestamp, unsigned int flag, void * user_data){
     AVCodecContext *avctx = user_data;
     TfvidContext *ctx = avctx->priv_data;
+    const int is_eos = !!(flag & TFDEC_BUFFER_FLAG_EOS);
     // if(flag)
     //     av_log(avctx, AV_LOG_WARNING, "%s [in] flag %u %lu size %d \n", __func__,flag,(unsigned long)pthread_self(),av_fifo_size(ctx->frame_queue)/sizeof(TfvidParsedFrame));
 
     TfvidParsedFrame frame ={0};
     frame.len = size;
-    frame.data = malloc(size);
     frame.timestamp = timestamp;
     frame.iskey = ((flag & (1<<20)) > 0);
-    
-    memcpy(frame.data,buffer,size);
+
+    if (size > 0 && buffer) {
+        frame.data = malloc(size);
+        if (!frame.data) {
+            av_log(avctx, AV_LOG_ERROR, "%s failed to allocate %d bytes\n", __func__, size);
+            tfdec_return_output(session, buffer);
+            return;
+        }
+
+        memcpy(frame.data, buffer, size);
+    }
 
     pthread_mutex_lock(&ctx->mutex);  
+    if (is_eos)
+        ctx->eos_received = 1;
+
     if(ctx->closed){
-        av_log(avctx, AV_LOG_WARNING, "%s callback after end ,len %d\n", __func__,size);
+        if (size > 0)
+            av_log(avctx, AV_LOG_WARNING, "%s callback after end ,len %d\n", __func__,size);
         goto end;
     }
+    if (!size || !buffer)
+        goto return_output;
+
     while(tfvid_is_buffer_full(avctx)){
 
         //'output buffer full warnning'
@@ -96,13 +115,15 @@ static void ff_tfdec_callback(TFDEC_HANDLE session, void * buffer, int size, uns
         usleep(1000);
         pthread_mutex_lock(&ctx->mutex);  
         if(ctx->closed){
-            av_log(avctx, AV_LOG_WARNING, "%s callback after end ,len %d\n", __func__,size);
+            if (size > 0)
+                av_log(avctx, AV_LOG_WARNING, "%s callback after end ,len %d\n", __func__,size);
             goto end;
         }
     }
     av_fifo_generic_write(ctx->frame_queue, &frame, sizeof(TfvidParsedFrame), NULL);
-    tfdec_return_output(session,buffer);
     frame.data = NULL;
+return_output:
+    tfdec_return_output(session,buffer);
 end:
     free(frame.data);
     pthread_mutex_unlock(&ctx->mutex);
@@ -127,9 +148,12 @@ static void tfvid_flush(AVCodecContext *avctx)
 
     ctx->frame_queue = av_fifo_alloc(ctx->nb_outbuffers * sizeof(TfvidParsedFrame));
     if (!ctx->frame_queue) {
+        pthread_mutex_unlock(&ctx->mutex);
         av_log(avctx, AV_LOG_ERROR, "Failed to recreate frame queue on flush\n");
         return;
     }
+    ctx->eos_sent = 0;
+    ctx->eos_received = 0;
 
     pthread_mutex_unlock(&ctx->mutex);  
 
@@ -302,9 +326,11 @@ static av_cold int tfvid_decode_init(AVCodecContext *avctx)
         av_log(avctx, AV_LOG_ERROR, "create tfdec failed. %d x %d on %s\n",probed_width,probed_height,ctx->tf_dev);
         return AVERROR(ENOMEM);
     }
+    ctx->codec_type = tfdec_codec_type;
 
     // set out buffers > input buffers, avoid the aka @'output buffer full warnning'
-    ctx->nb_outbuffers = tfdec_query_input_queue(ctx->handle) + 5;
+    ctx->input_queue_capacity = tfdec_query_input_queue(ctx->handle);
+    ctx->nb_outbuffers = ctx->input_queue_capacity + 5;
     ctx->frame_queue = av_fifo_alloc(ctx->nb_outbuffers * sizeof(TfvidParsedFrame));
     av_log(avctx, AV_LOG_WARNING, "decode queue init size %d, max %d \n",av_fifo_size(ctx->frame_queue),ctx->nb_outbuffers);
     if (!ctx->frame_queue) {
@@ -318,6 +344,8 @@ static av_cold int tfvid_decode_init(AVCodecContext *avctx)
     }
 
     ctx->closed = 0;
+    ctx->eos_sent = 0;
+    ctx->eos_received = 0;
     
     ctx->prev_pts = INT64_MIN;
 
@@ -348,11 +376,10 @@ static int tfvid_decode_packet(AVCodecContext *avctx, const AVPacket *avpkt)
         return AVERROR(EAGAIN);
 
     static int64_t pc = 0;
-    int64_t timestamp;
+    int64_t timestamp = 0;
     unsigned int flag = 0;
     int iskey = 0;
     if (avpkt && avpkt->size) {
-
         pc++;
         // av_log(avctx, AV_LOG_WARNING, "%s [out] len %d #%d\n", __func__,avpkt->size,pc);
         iskey = (analyzeh264Frame(avpkt->data,avpkt->size > 1000?1000:avpkt->size) > 0);
@@ -366,8 +393,11 @@ static int tfvid_decode_packet(AVCodecContext *avctx, const AVPacket *avpkt)
             av_log(avctx, AV_LOG_WARNING, "No pts packet\n");
         }
     } else {
-        flag = TFDEC_BUFFER_FLAG_EOS;
         ctx->decoder_flushing = 1;
+        if (ctx->eos_sent)
+            return 0;
+        flag = TFDEC_BUFFER_FLAG_EOS;
+        ctx->eos_sent = 1;
     }
     flag |= (iskey?(1<<20):0);//TODO tfdec won't return flag now
 
@@ -413,28 +443,49 @@ static int tfvid_output_frame(AVCodecContext *avctx, AVFrame *frame)
     // av_log(avctx, AV_LOG_TRACE, "tfvid_output_frame\n");
     // av_log(avctx, AV_LOG_WARNING, "%s [in]\n", __func__);
 
-    if (ctx->decoder_flushing) {
-        ret = tfvid_decode_packet(avctx, NULL);
-        if (ret < 0 && ret != AVERROR_EOF)
-            return ret;
-    }
-
-    if (!tfvid_is_buffer_full(avctx)) {
+    if (!ctx->decoder_flushing && !tfvid_is_buffer_full(avctx)) {
         AVPacket pkt = {0};
         ret = ff_decode_get_packet(avctx, &pkt);
         if (ret < 0 && ret != AVERROR_EOF)
             return ret;
-        ret = tfvid_decode_packet(avctx, &pkt);
+        if (ret == AVERROR_EOF) {
+            ctx->decoder_flushing = 1;
+        } else {
+            ret = tfvid_decode_packet(avctx, &pkt);
+            // cuvid_is_buffer_full() should avoid this.
+            if (ret == AVERROR(EAGAIN))
+                ret = AVERROR_EXTERNAL;
+            if (ret < 0 && ret != AVERROR_EOF)
+                return ret;
+        }
         av_packet_unref(&pkt);
-        // cuvid_is_buffer_full() should avoid this.
-        if (ret == AVERROR(EAGAIN))
-            ret = AVERROR_EXTERNAL;
-        if (ret < 0 && ret != AVERROR_EOF)
-            return ret;
+    }
+
+    if (ctx->decoder_flushing && !ctx->eos_sent) {
+        while (!av_fifo_size(ctx->frame_queue) &&
+               ctx->handle &&
+               tfdec_query_input_queue(ctx->handle) < ctx->input_queue_capacity &&
+               !ctx->closed) {
+            usleep(1000);
+        }
+
+        if (ctx->handle &&
+            tfdec_query_input_queue(ctx->handle) == ctx->input_queue_capacity) {
+            ret = tfvid_decode_packet(avctx, NULL);
+            if (ret < 0 && ret != AVERROR_EOF)
+                return ret;
+        }
     }
 
     TfvidParsedFrame parsed_frame; 
     parsed_frame.data = NULL;
+
+    while (!av_fifo_size(ctx->frame_queue) &&
+           ctx->decoder_flushing &&
+           !ctx->eos_received &&
+           !ctx->closed) {
+        usleep(1000);
+    }
 
     if (av_fifo_size(ctx->frame_queue)) {
 
@@ -520,7 +571,7 @@ static int tfvid_output_frame(AVCodecContext *avctx, AVFrame *frame)
         else
             frame->pts = parsed_frame.timestamp;
 
-    } else if (ctx->decoder_flushing) {
+    } else if (ctx->decoder_flushing && ctx->eos_received) {
         ret = AVERROR_EOF;
     } else {
         ret = AVERROR(EAGAIN);
