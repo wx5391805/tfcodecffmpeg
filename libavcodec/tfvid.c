@@ -372,8 +372,8 @@ static int tfvid_decode_packet(AVCodecContext *avctx, const AVPacket *avpkt)
     if (is_flush && avpkt && avpkt->size)
         return AVERROR_EOF;
 
-    if (tfvid_is_buffer_full(avctx) && avpkt && avpkt->size)
-        return AVERROR(EAGAIN);
+    /* No second queue-full check here: returning EAGAIN lost the packet; the decoder callback waits while
+     * the queue is full. */
 
     static int64_t pc = 0;
     int64_t timestamp = 0;
