@@ -27,6 +27,8 @@ typedef struct TfencContext {
     int nb_buffers;
     pthread_mutex_t mutex;
     volatile int closed;
+    volatile int eos_sent;      /* end of stream sent to the engine */
+    volatile int eos_received;  /* the engine's end-of-stream callback came */
     char* tf_dev;
     int rc;
     AVFifoBuffer *output_buffer_ready_queue;

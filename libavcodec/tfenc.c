@@ -1,4 +1,5 @@
 #include "tfenc.h"
+#include <unistd.h>  /* usleep */
 
 #include "libavutil/internal.h"
 
@@ -81,7 +82,12 @@ static void ff_tfenc_callback(void *user_param, void *data, int len)
     AVCodecContext *avctx = user_param;
     TfencContext *ctx = avctx->priv_data;
     // av_log(avctx, AV_LOG_WARNING, "%s [in]\n", __func__);
-    TfencBuffer *buffer = malloc(sizeof(TfencBuffer));
+    TfencBuffer *buffer;
+    if (len <= 0) {  /* end of stream */
+        ctx->eos_received = 1;
+        return;
+    }
+    buffer = malloc(sizeof(TfencBuffer));
     buffer->data = malloc(len);
     buffer->len = len;
 
@@ -452,6 +458,13 @@ static int ff_tf_enc_receive_packet(AVCodecContext *avctx, AVPacket *pkt)
     } else
         av_frame_unref(frame);
 
+    if (avctx->internal->draining && !frame->buf[0] && !ctx->eos_sent) {
+        /* End of stream once, then wait for the frames the engine still holds. */
+        tfenc_process_frame(ctx->handle, NULL, 0);
+        ctx->eos_sent = 1;
+    }
+    for (int waited = 0; ctx->eos_sent && !ctx->eos_received && !output_ready(avctx, 1) && waited < 5000; waited++)
+        usleep(1000);
     if (output_ready(avctx, avctx->internal->draining)) {
         av_fifo_generic_read(ctx->output_buffer_ready_queue, &out_buf, sizeof(out_buf), NULL);
 
