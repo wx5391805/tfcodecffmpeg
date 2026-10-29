@@ -285,6 +285,8 @@ External library support:
   --enable-libtensorflow   enable TensorFlow as a DNN module backend
                            for DNN based filters like sr [no]
   --enable-libtesseract    enable Tesseract, needed for ocr filter [no]
+  --enable-libtfcodec      enable ThinkForce TF7140 codecs via libtfdec/libtfenc [no]
+  --tfdldir=DIR            use the TFDL2 SDK unpacked in DIR (enables libtfcodec) [none]
   --enable-libtheora       enable Theora encoding via libtheora [no]
   --enable-libtls          enable LibreSSL (via libtls), needed for https support
                            if openssl, gnutls or mbedtls is not used [no]
@@ -2064,6 +2066,7 @@ EXTERNAL_LIBRARY_GPLV3_LIST="
 "
 
 EXTERNAL_LIBRARY_LIST="
+    libtfcodec
     $EXTERNAL_LIBRARY_GPL_LIST
     $EXTERNAL_LIBRARY_NONFREE_LIST
     $EXTERNAL_LIBRARY_VERSION3_LIST
@@ -2894,6 +2897,7 @@ CMDLINE_SET="
     as
     assert_level
     build_suffix
+    tfdldir
     cc
     objcc
     cpu
@@ -3644,6 +3648,16 @@ h264_oh_decoder_select="h264_mp4toannexb_bsf"
 h264_oh_encoder_deps="ohcodec"
 h264_qsv_decoder_select="h264_mp4toannexb_bsf qsvdec"
 h264_qsv_encoder_select="atsc_a53 qsvenc"
+h264_tf_decoder_deps="libtfcodec"
+h264_tf_decoder_select="h264_mp4toannexb_bsf"
+hevc_tf_decoder_deps="libtfcodec"
+hevc_tf_decoder_select="hevc_mp4toannexb_bsf"
+mjpeg_tf_decoder_deps="libtfcodec"
+mpeg2_tf_decoder_deps="libtfcodec"
+mpeg4_tf_decoder_deps="libtfcodec"
+vp8_tf_decoder_deps="libtfcodec"
+h264_tf_encoder_deps="libtfcodec"
+hevc_tf_encoder_deps="libtfcodec"
 h264_rkmpp_decoder_deps="rkmpp"
 h264_rkmpp_decoder_select="h264_mp4toannexb_bsf"
 h264_rkmpp_encoder_deps="rkmpp"
@@ -5579,6 +5593,13 @@ test_cpp_condition windows.h "_MSC_FULL_VER >= 193030705" &&
 test_host_cpp_condition windows.h "_MSC_FULL_VER >= 193030705" &&
     check_host_cflags -options:strict
 
+if test -n "$tfdldir"; then
+    enable libtfcodec
+    add_cflags -I$tfdldir
+    add_ldflags -L$tfdldir/tfdec -L$tfdldir/tfenc
+    add_ldexeflags -Wl,-rpath,$tfdldir/tfdec -Wl,-rpath,$tfdldir/tfenc
+    add_ldsoflags -Wl,-rpath,$tfdldir/tfdec -Wl,-rpath,$tfdldir/tfenc
+fi
 add_cflags $extra_cflags
 add_cxxflags $extra_cxxflags
 add_objcflags $extra_objcflags
@@ -7444,6 +7465,7 @@ enabled libsvtav1         && require_pkg_config libsvtav1 "SvtAv1Enc >= 0.9.0" E
 enabled libsvtjpegxs      && require_pkg_config libsvtjpegxs "SvtJpegxs >= 0.10.0" SvtJpegxsEnc.h svt_jpeg_xs_encoder_init
 enabled libtensorflow     && require libtensorflow tensorflow/c/c_api.h TF_Version -ltensorflow
 enabled libtesseract      && require_pkg_config libtesseract tesseract tesseract/capi.h TessBaseAPICreate
+enabled libtfcodec        && require libtfcodec "stdint.h tfdec/libtfdec.h" tfdec_create -ltfdec -ltfenc -lpthread
 enabled libtheora         && { check_pkg_config libtheora theoraenc theora/theoraenc.h th_info_init ||
                                require libtheora theora/theoraenc.h th_info_init -ltheoraenc -ltheoradec -logg; }
 enabled libtls            && require_pkg_config libtls libtls tls.h tls_configure &&
