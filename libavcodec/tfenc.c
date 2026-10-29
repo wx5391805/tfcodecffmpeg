@@ -217,7 +217,7 @@ static av_cold int ff_tf_enc_close(AVCodecContext *avctx)
     pthread_mutex_lock(&ctx->mutex);  
 
     TfencBuffer* out_buf;
-    while (output_ready(avctx, avctx->internal->draining)) {
+    while (ctx->output_buffer_ready_queue && output_ready(avctx, avctx->internal->draining)) {  /* init may have failed */
         av_fifo_generic_read(ctx->output_buffer_ready_queue, &out_buf, sizeof(out_buf), NULL);
 
         free(out_buf->data);
