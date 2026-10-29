@@ -104,6 +104,14 @@ static void ff_tfenc_callback(void *user_param, void *data, int len)
         av_log(avctx, AV_LOG_WARNING, "%s callback after end ,len %d\n", __func__,len);
         goto err;
     }
+    /* The queue starts with 4 entries; grow it rather than overwrite unread ones. */
+    if (av_fifo_space(ctx->output_buffer_ready_queue) < (int)sizeof(buffer) &&
+        av_fifo_grow(ctx->output_buffer_ready_queue, av_fifo_size(ctx->output_buffer_ready_queue)) < 0) {
+        av_log(avctx, AV_LOG_ERROR, "%s out of memory, packet dropped\n", __func__);
+        free(buffer->data);
+        free(buffer);
+        goto err;
+    }
     av_fifo_generic_write(ctx->output_buffer_ready_queue, &buffer, sizeof(buffer), NULL);
 err:
     pthread_mutex_unlock(&ctx->mutex); 
@@ -322,6 +330,9 @@ static int copy_avframe_to_buffer(AVFrame *frame, uint8_t *buffer) {
 
 static inline void timestamp_queue_enqueue(AVFifoBuffer* queue, int64_t timestamp)
 {
+    /* One entry per frame the engine still holds; grow rather than overwrite unread ones. */
+    if (av_fifo_space(queue) < (int)sizeof(timestamp) && av_fifo_grow(queue, av_fifo_size(queue)) < 0)
+        return;
     av_fifo_generic_write(queue, &timestamp, sizeof(timestamp), NULL);
 }
 
@@ -435,6 +446,20 @@ error:
 error2:
     return res;
 }
+/* Takes the oldest coded buffer; the engine's callback thread writes (and may grow) the queue under the mutex. */
+static int take_output(AVCodecContext *avctx, TfencBuffer **buf)
+{
+    TfencContext *ctx = avctx->priv_data;
+    int ok;
+
+    pthread_mutex_lock(&ctx->mutex);
+    ok = output_ready(avctx, avctx->internal->draining) > 0;
+    if (ok)
+        av_fifo_generic_read(ctx->output_buffer_ready_queue, buf, sizeof(*buf), NULL);
+    pthread_mutex_unlock(&ctx->mutex);
+    return ok;
+}
+
 static int ff_tf_enc_receive_packet(AVCodecContext *avctx, AVPacket *pkt)
 {
     TfencContext *ctx = avctx->priv_data;
@@ -465,9 +490,7 @@ static int ff_tf_enc_receive_packet(AVCodecContext *avctx, AVPacket *pkt)
     }
     for (int waited = 0; ctx->eos_sent && !ctx->eos_received && !output_ready(avctx, 1) && waited < 5000; waited++)
         usleep(1000);
-    if (output_ready(avctx, avctx->internal->draining)) {
-        av_fifo_generic_read(ctx->output_buffer_ready_queue, &out_buf, sizeof(out_buf), NULL);
-
+    if (take_output(avctx, &out_buf)) {
         res = process_output_buffer(avctx, pkt, out_buf);
 
         if (res)
