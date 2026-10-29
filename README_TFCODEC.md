@@ -80,7 +80,8 @@ ffmpeg -c:v mjpeg_tf -i in.jpg out.png
 ## 测试脚本
 
 `thinkfs/` 下：`test.tfdec.sh`（多解码器并发）、`test.tfenc.sh`、`test.transcode.sh`、`test.jpeg.sh`，
-参数为输入视频，例如 `FF=/opt/ffmpeg/bin/ffmpeg ./test.tfdec.sh thinkfs/IMG_1224.MP4`。
+参数为输入视频，例如在 `thinkfs/` 下执行 `FF=/opt/ffmpeg/bin/ffmpeg ./test.tfdec.sh /path/to/input.mp4`
+（可用 tfcodec4.4 分支 `thinkfs/IMG_1224.MP4` 作样片）。
 
 ---
 
@@ -102,4 +103,5 @@ FFmpeg 9.0.2 with hardware video decoding and encoding on ThinkForce TF7140/7180
   for H.264 to HEVC transcoding. H.264, HEVC and VP8 output is frame-exact against FFmpeg's software decoders.
 - Not supported: 10-bit, mid-stream resolution changes, hwcontext, VP9, a JPEG encoder (the E200's JPEG
   quantisation is fixed at roughly libjpeg quality 25).
-- Tests: `FF=/opt/ffmpeg/bin/ffmpeg thinkfs/test.*.sh <input video>`.
+- Tests: in `thinkfs/`, `FF=/opt/ffmpeg/bin/ffmpeg ./test.tfdec.sh <input video>` (and the other `test.*.sh`);
+  `thinkfs/IMG_1224.MP4` of the tfcodec4.4 branch is a suitable sample.
